@@ -27,6 +27,7 @@
  *
  */
 
+#include "protocol.h"
 #include "contiki.h"
 #include "contiki-lib.h"
 #include "contiki-net.h"
@@ -39,12 +40,21 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#define SEND_INTERVAL		15 * CLOCK_SECOND
+#define SEND_INTERVAL		10 * CLOCK_SECOND
 #define MAX_PAYLOAD_LEN		40
 #define CONN_PORT     8802
-#define MDNS 0
+#define MDNS 1
+
+#define LED_TOGGLE_REQUEST (0x79)
+#define LED_SET_STATE (0x7A)
+#define LED_GET_STATE (0x7B)
+#define LED_STATE (0x7C)
+
 
 static char buf[MAX_PAYLOAD_LEN];
+static struct mathopreq req;
+
+
 
 static struct uip_udp_conn *client_conn;
 
@@ -62,21 +72,79 @@ tcpip_handler(void)
 
     if(uip_newdata()) {
         dados = uip_appdata;
-        dados[uip_datalen()] = '\0';
-        printf("Response from the server: '%s'\n", dados);
+
+        switch(dados[0]) {
+            case LED_SET_STATE:
+                printf("\nResposta do server: LED_SET_STATE");
+                char statusLed = dados[1];
+
+                leds_off(LEDS_RED);
+                leds_off(LEDS_GREEN);
+
+                if(statusLed & 0b01){
+                    leds_on(LEDS_GREEN);
+                } else if(statusLed & 0b10){
+                    leds_on(LEDS_RED);
+                }
+                break;
+            case LED_GET_STATE:
+                printf("\nResposta do server: LED_GET_STATE");
+                break;
+          }
+
+
+        printf("\nLedState = %c", leds_get());
+        buf[0] = LED_STATE;
+        buf[1] = leds_get();
+        buf[2] = ' ';
+        buf[3] = '=';
+        buf[4] = '=';
+        buf[5] = '=';
+        buf[6] = '=';
+        buf[7] = 'I';
+        buf[8] = 'o';
+        buf[9] = 'T';
+        buf[10] = ' ';
+        buf[11] = ' ';
+        buf[12] = '2';
+        buf[13] = '0';
+        buf[14] = '1';
+        buf[15] = '7';
+        buf[16] = ' ';
+        buf[17] = '=';
+        buf[18] = '=';
+        buf[19] = '=';
+        buf[20] = '=';
+
+        uip_udp_packet_send(client_conn, buf, strlen(buf));
+
+
+        req.opRequest = OP_REQUEST;
+        req.op1 = 15;
+        req.operation = OP_SUBTRACT;
+        req.op2 = 5;
+        req.fc = 2;
+        uip_udp_packet_send(client_conn, &req, sizeof(struct mathopreq));
     }
+
+
+
+
 }
 /*---------------------------------------------------------------------------*/
 static void
-timeout_handler(void)
+timeout_handler(char payload)
 {
-    char payload = 0;
-
     buf[0] = payload;
     if(uip_ds6_get_global(ADDR_PREFERRED) == NULL) {
       PRINTF("Aguardando auto-configuracao de IP\n");
       return;
     }
+
+    PRINTF("\nCliente para [");
+    PRINT6ADDR(&client_conn->ripaddr);
+    PRINTF("]:%u", UIP_HTONS(client_conn->rport));
+
     uip_udp_packet_send(client_conn, buf, strlen(buf));
 }
 /*---------------------------------------------------------------------------*/
@@ -183,7 +251,7 @@ PROCESS_THREAD(udp_client_process, ev, data)
   }
 #else
   //c_onfigures the destination IPv6 address
-  uip_ip6addr(&ipaddr, 0xfe80, 0, 0, 0, 0x215, 0x2000, 0x0002, 0x2145);
+  uip_ip6addr(&ipaddr, 0xFD00, 0, 0, 0, 0x212, 0x4B00, 0x791, 0xB681);
 #endif
   /* new connection with remote host */
   client_conn = udp_new(&ipaddr, UIP_HTONS(CONN_PORT), NULL);
@@ -197,7 +265,7 @@ PROCESS_THREAD(udp_client_process, ev, data)
   while(1) {
     PROCESS_YIELD();
     if(etimer_expired(&et)) {
-      timeout_handler();
+      timeout_handler(LED_TOGGLE_REQUEST);
       etimer_restart(&et);
     } else if(ev == tcpip_event) {
       tcpip_handler();
