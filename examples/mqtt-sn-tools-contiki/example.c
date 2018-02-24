@@ -1,7 +1,6 @@
 /*
   Basic MQTT-SN client library
   Copyright (C) 2013 Nicholas Humfrey
-
   Permission is hereby granted, free of charge, to any person obtaining
   a copy of this software and associated documentation files (the
   "Software"), to deal in the Software without restriction, including
@@ -9,10 +8,8 @@
   distribute, sublicense, and/or sell copies of the Software, and to
   permit persons to whom the Software is furnished to do so, subject to
   the following conditions:
-
   The above copyright notice and this permission notice shall be
   included in all copies or substantial portions of the Software.
-
   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -20,7 +17,6 @@
   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
   OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
   Modifications:
   Copyright (C) 2013 Adam Renner
 */
@@ -55,15 +51,9 @@
 #define REPLY_TIMEOUT (3 * CLOCK_SECOND)
 
 static struct mqtt_sn_connection mqtt_sn_c;
-<<<<<<< HEAD
-static char *mqtt_client_id="sensor";
-static char ctrl_topic[22] = "00124B000F28C186/ctrl\0";//of form "0011223344556677/ctrl" it is null terminated, and is 21 charactes
-static char pub_topic[21] = "00124B000F28C186/msg\0";
-=======
 static char mqtt_client_id[17];
 static char ctrl_topic[22] = "0000000000000000/ctrl\0";//of form "0011223344556677/ctrl" it is null terminated, and is 21 charactes
 static char pub_topic[21] = "0000000000000000/msg\0";
->>>>>>> da5345ceaee08a82d47eaffd470940478dc3eb93
 static uint16_t ctrl_topic_id;
 static uint16_t publisher_topic_id;
 static publish_packet_t incoming_packet;
@@ -339,8 +329,6 @@ set_connection_address(uip_ipaddr_t *ipaddr)
 
 PROCESS_THREAD(example_mqttsn_process, ev, data)
 {
-
-    printf("\n\n\nCOMECOU - LETS ROCK IT\n\n");
   static struct etimer periodic_timer;
   static struct etimer et;
   static uip_ipaddr_t broker_addr,google_dns;
@@ -378,21 +366,7 @@ PROCESS_THREAD(example_mqttsn_process, ev, data)
 
   print_local_addresses();
 
-<<<<<<< HEAD
-  //uip_ip6addr(&broker_addr, 0xbbbb, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x200);
 
-  //http://pksr.eletrica.eng.br/
-  //2804:7f4:3b80:a4f1:76bb:4e0f:e3e9:636c
-  uip_ip6addr(&broker_addr, 0x2804, 0x7f4, 0x3b80, 0xa4f1, 0x76bb, 0x4e0f, 0xe3e9, 0x636c);
-
-
-  //uip_ip6addr(&broker_addr, 0xbbbb, 0x0, 0x0, 0x0, 0x6066, 0xcf93, 0xa440, 0xd672);
-
-
-  //static uint16_t broker_address[] = {0xbbbb, 0, 0, 0, 0xc83e, 0xccfc, 0x7, 0x12a};
-=======
-
->>>>>>> da5345ceaee08a82d47eaffd470940478dc3eb93
 
 
   rpl_dag_t *dag = rpl_get_any_dag();
@@ -423,13 +397,7 @@ PROCESS_THREAD(example_mqttsn_process, ev, data)
           linkaddr_node_addr.u8[4],linkaddr_node_addr.u8[5],linkaddr_node_addr.u8[6],
           linkaddr_node_addr.u8[7]);
 
-<<<<<<< HEAD
-  //MEU DEVICE_ID: 00124B000F28C186
-  printf("\nDEVICE: %s\n", device_id);
-
-=======
   sprintf(mqtt_client_id,"sens%02X%02X%02X%02X",linkaddr_node_addr.u8[4],linkaddr_node_addr.u8[5],linkaddr_node_addr.u8[6], linkaddr_node_addr.u8[7]);
->>>>>>> da5345ceaee08a82d47eaffd470940478dc3eb93
 
 
   /*Request a connection and wait for connack*/
@@ -481,5 +449,3 @@ PROCESS_THREAD(example_mqttsn_process, ev, data)
   }
   PROCESS_END();
 }
-/*---------------------------------------------------------------------------*/
-
