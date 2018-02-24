@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
+#include <stdlib.h>// necessário p/ as funções rand() e srand()
+#include <time.h>//necessário p/ função time()
 #include "board-peripherals.h"
 #include "button-sensor.h"
 #include "contiki.h"
@@ -12,19 +15,32 @@
 #include "dev/watchdog.h"
 #include "lib/sensors.h"
 #include "net/rpl/rpl.h"
+
+
+#define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 #include "random.h"
-#include "sys/etimer.h"
-#include "sys/ctimer.h"
 #include "ti-lib.h"
 
-
-
 //Definicoes de Constantes
-#define CONN_PORT 8802//Porta para MSG UDP
-#define DEBUG DEBUG_PRINT //Para imprimir o IPV6
-#define DEBUG true
+#define PORT_MSG 8802//Porta para MSG UDP
+#define PORTA_DESTINO 8805//Porta para MSG UDP
+
+#define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
+#define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLH_LEN + UIP_IPH_LEN])
+
+
 #define TAMANHO_BUFFER 1024
+
+#define ABRIR_PORTA 0x3A
+#define FECHAR_PORTA 0x3B
+#define GET_STATUS 0x3C
+
+#define STATUS 0x4A
+
+#define ELEVADOR_EM_MOVIMENTO 0x5A
+#define ELEVADOR_PARADO 0x5B
+#define SET_ANDAR 0x5C
 
 #define PORTA_ABERTA 0x6A
 #define PORTA_FECHADA 0x6B
@@ -33,22 +49,19 @@
 #define NIVEL_ELEVADOR_ACIMA 0x6D
 #define NIVEL_ELEVADOR_CORRETO 0x6E
 
-#define ELEVADOR_EM_MOVIMENTO 0x5A
-#define ELEVADOR_PARADO 0x5B
-
-#define ANDAR_MINIMO -2
-#define ANDAR_MAXIMO 3
+#define ANDAR_MINIMO 0
+#define ANDAR_MAXIMO 2
 
 #define QTD_MAX_ERROS_PERMITIDO 2
 
-#define LED_ELEVADOR_MOVIMENTO_1 IOID_10
-#define LED_ELEVADOR_MOVIMENTO_2 IOID_11
-#define LED_ELEVADOR_MOVIMENTO_3 IOID_12
+#define LED_ELEVADOR_MOVIMENTO_1 IOID_13
+#define LED_ELEVADOR_MOVIMENTO_2 IOID_14
+#define LED_ELEVADOR_MOVIMENTO_3 IOID_15
 
 
-#define LED_NIVEL_ELEVADOR_ACIMA IOID_13
-#define LED_NIVEL_ELEVADOR_ABAIXO IOID_14
-#define LED_NIVEL_ELEVADOR_CORRETO IOID_15
+#define LED_NIVEL_ELEVADOR_ACIMA IOID_25
+#define LED_NIVEL_ELEVADOR_CORRETO IOID_26
+#define LED_NIVEL_ELEVADOR_ABAIXO IOID_27
 
 #define LED_COR_PORTA_ABERTA 31
 #define LED_COR_PORTA_FECHADA 32
@@ -56,18 +69,26 @@
 
 //Estruturas para o projeto
 static struct sensors_sensor *sensor;
-static struct etimer et;
 static struct uip_udp_conn *server_conn;
+static struct uip_udp_conn *conexaoDestino;
+static uip_ipaddr_t ipDestino;
+
+static struct StatusElevador {
+	int  porta;
+	int  elevador;
+	int  nivelPorta;
+   int  andarAtual;
+   int	andarDestino;
+} statusElevador;
+
+static struct StatusElevador statusElevador;
 
 //Variaveis Globais
-static int qtdMaxAndar = ((ANDAR_MAXIMO >= 0 ? ANDAR_MAXIMO : ANDAR_MAXIMO * -1) + (ANDAR_MINIMO >= 0 ? ANDAR_MINIMO : ANDAR_MINIMO * -1)) +1;
 static int porta = PORTA_ABERTA;
 static int nivelElevador = NIVEL_ELEVADOR_CORRETO;
 static int elevador = ELEVADOR_PARADO;
 static int andarAtual = 0;
 static int andarDestino = 0;
-static int *andares;
-static char log[TAMANHO_BUFFER];
 
 /*---------------------------------------------------------------------------*/
 PROCESS(projetoUDP_process, "projetoUDP process");
@@ -91,6 +112,15 @@ static void print_local_addresses(void) {
 	}
 }
 
+static int randomLed()
+{
+	//srand(time(NULL));
+	//return 0 + rand() % (3 + 1 - 0);
+
+	return 1;
+}
+
+
 //Metodo para tratar um evento do tipo TCP/IP
 static void eventoTcpIP(void) {
 	printf("\n\nEvento TCP/IP - Recebido");
@@ -103,20 +133,54 @@ static void eventoTcpIP(void) {
 	if (uip_newdata()) {
 		((char *) uip_appdata)[uip_datalen()] = 0;
 
+		char operacao[50];
+
 		switch (msg[0]) {
+			case GET_STATUS: {
+				strcpy(operacao, "\nGET_STATUS");
+				printf(operacao);
+
+
+				//Fazer uma Função que retornar um valor randomico par ao nivel do elevar 1, 2 e 3
+				int nivel = randomLed();
+				int respostaNivel;
+				if(nivel == 1) {
+					respostaNivel = NIVEL_ELEVADOR_ABAIXO;
+				} else if(nivel == 2) {
+					respostaNivel = NIVEL_ELEVADOR_CORRETO;
+				} else {
+					respostaNivel = NIVEL_ELEVADOR_ACIMA;
+				}
+
+				printf("\nNivel = %d", respostaNivel);
+
+				break;
+			}
+			case SET_ANDAR: {
+				strcpy(operacao, "\nSET ANDAR");
+				printf(operacao);
+				andarAtual = andarDestino;
+				andarDestino = msg[1];
+
+				break;
+			}
 			case PORTA_ABERTA: {
-				printf("\nPorta Aberta");
+				strcpy(operacao, "\nPorta Aberta");
+				printf(operacao);
 				porta = PORTA_ABERTA;
 
 				if(elevador == ELEVADOR_EM_MOVIMENTO && porta == PORTA_ABERTA){
 					printf("\nA Porta nao pode abrir, pois o elevador esta em movimento\n\n");
 					porta = PORTA_FECHADA;//Volta o status
 				}
+
 				break;
 			}
 			case PORTA_FECHADA: {
-				printf("\nPorta Fechada");
+				strcpy(operacao, "\nPorta Fehada");
+				printf(operacao);
 				porta = PORTA_FECHADA;
+
 				break;
 			}
 			case ELEVADOR_EM_MOVIMENTO: {
@@ -136,23 +200,20 @@ static void eventoTcpIP(void) {
 			case NIVEL_ELEVADOR_ABAIXO: {
 				printf("\nNivel do Elevador - Abaixo do Esperado");
 				nivelElevador = NIVEL_ELEVADOR_ABAIXO;
-				andares[andarDestino +(ANDAR_MINIMO * -1)]++;
 				break;
 			}
 			case NIVEL_ELEVADOR_ACIMA: {
 				printf("\nNivel do Elevador - Acima do Esperado");
 				nivelElevador = NIVEL_ELEVADOR_ACIMA;
-				andares[andarDestino +(ANDAR_MINIMO * -1)]++;
 				break;
 			}
 			case NIVEL_ELEVADOR_CORRETO: {
 				printf("\nNivel do Elevador - Correto");
 				nivelElevador = NIVEL_ELEVADOR_CORRETO;
-				andares[andarDestino +(ANDAR_MINIMO * -1)] = andares[andarDestino +(ANDAR_MINIMO * -1)] > 0 ? andares[andarDestino +(ANDAR_MINIMO * -1)] -1 : 0;
 				break;
 			}
 			default: {
-				printf("Comando Invalido: ");
+				printf("\nComando Invalido: ");
 				for (i = 0; i < uip_datalen(); i++) {
 					printf("0x%02X ", msg[i]);
 				}
@@ -160,6 +221,30 @@ static void eventoTcpIP(void) {
 				break;
 			}
 		}
+		printf("\nCriando MSG - ");
+
+						//Enviar MSG MANUAL 2804:7f4:3b80:a336:5b28:1dc7:2166:7d4f
+						uip_ip6addr(&ipDestino, 0x2804, 0x7f4, 0x3b80, 0xa336, 0x5b28, 0x1dc7, 0x2166, 0x7d4f);
+						conexaoDestino = udp_new(&ipDestino, UIP_HTONS(PORTA_DESTINO), NULL);
+						PRINT6ADDR(&conexaoDestino->ripaddr);
+						udp_bind(conexaoDestino, UIP_HTONS(PORTA_DESTINO));
+						//uip_udp_packet_send( conexaoDestino, minhaMSG, 2);
+		//				uip_udp_packet_send( conexaoDestino, "aa", strlen("aa"));
+
+						//Prepara o Buffer
+
+						printf("\n\nMAndando MSG");
+						statusElevador.elevador = elevador;
+						statusElevador.nivelPorta = nivelElevador;
+						statusElevador.porta = porta;
+						statusElevador.andarAtual = andarAtual;
+						statusElevador.andarDestino = andarDestino;
+
+						//Envia MSG para o JAVA
+						uip_udp_packet_send(conexaoDestino, &statusElevador, sizeof(struct StatusElevador));
+
+						printf("\n\nMSG Enviada");
+
 	}
 
 	return;
@@ -197,35 +282,35 @@ static void acaoElevadorEmMovimento(int op){
 		}
 	} else if(op == 1){//Elevador Subindo
 		acenderLed(LED_ELEVADOR_MOVIMENTO_3);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_3);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 
 		acenderLed(LED_ELEVADOR_MOVIMENTO_2);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_2);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 
 		acenderLed(LED_ELEVADOR_MOVIMENTO_1);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_1);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 
 	} else {//Elevador Descendo
 		acenderLed(LED_ELEVADOR_MOVIMENTO_1);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_1);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 
 		acenderLed(LED_ELEVADOR_MOVIMENTO_2);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_2);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 
 		acenderLed(LED_ELEVADOR_MOVIMENTO_3);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 		apagarLed(LED_ELEVADOR_MOVIMENTO_3);
-		sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
+		//sleep_now(0.5);//TODO validar se aqui faz o sleep para dar o efeito de piscar
 	}
 }
 
@@ -254,47 +339,12 @@ static void acoes(){
 	}
 }
 
-static void imprimir(){
-	strcpy(log, "");
-	strcat(log, "\n\n\n===Estado dos Sensores===");
-    strcat(log, "\nPorta: %s", porta == PORTA_ABERTA ? "Porta Aberta" : "Porta Fechada");
-    strcat(log, "\nElevador: %s", elevador == ELEVADOR_EM_MOVIMENTO? "Elevador Em Movimento" : "Elevador Parado");
-
-    strcat(log, "\nAndar de Atual: %d", andarAtual);
-    strcat(log, "\nAndar de Destino: %d", andarDestino);
-    if(andarAtual > andarDestino) {
-        strcat(log, "\nO Elevador Descendo");
-    } else if(andarDestino > andarAtual) {
-        strcat(log, "\nO Elevador Subindo");
-    } else {
-        strcat(log, "\nO Elevador Parado");
-    }
-
-    if(nivelElevador == NIVEL_ELEVADOR_ABAIXO){
-        strcat(log, "\nNivel do Elevador: Abaixo do Esperado");
-    } else if(nivelElevador == NIVEL_ELEVADOR_ACIMA){
-        strcat(log, "\nNivel do Elevador: Acima do Esperado");
-    } else {
-        strcat(log, "\nNivel do Elevador: Correto");
-    }
-
-    strcat(log, "\n\n i = %d, v = %d",andarDestino +(ANDAR_MINIMO * -1), andares[andarDestino +(ANDAR_MINIMO * -1)]);
-
-    //Atingiu o numero maximo de erros permitidos
-    if(andares[andarDestino +(ANDAR_MINIMO * -1)] > QTD_MAX_ERROS_PERMITIDO){
-        strcat(log, "\n\nOBS: Chamar a equipe de manutencao, pois o elevador excedeu o numero maximo de erros permitidos no andar: %d", andarDestino);
-    }
-    strcat(log, "\n\n");
-
-    printf(log);
-}
 
 PROCESS_THREAD(projetoUDP_process, ev, data) {
 
 	//Configuracao Inicial de ROUTER
 	#if UIP_CONF_ROUTER
 		uip_ipaddr_t ipaddr;
-		rpl_dag_t *dag;
 	#endif /* UIP_CONF_ROUTER */
 
 
@@ -310,34 +360,26 @@ PROCESS_THREAD(projetoUDP_process, ev, data) {
 		//Print IP
 		print_local_addresses();
 
-		//Criando um evento de tempo a cada 1s
-		etimer_set(&et, CLOCK_SECOND * 1);
-
 		//Configurando um sensor do tipo ADC
 		sensor = sensors_find(ADC_SENSOR);
 		//Definindo um PINO de ENTRADA
 		sensor->configure(ADC_SENSOR_SET_CHANNEL, ADC_COMPB_IN_AUXIO7);
 
 		//Definino pinos de Saidas
-		IOCPinTypeGpioOutput(IOID_11);
-		IOCPinTypeGpioOutput(IOID_12);
-		IOCPinTypeGpioOutput(IOID_13);
-		IOCPinTypeGpioOutput(IOID_14);
-		IOCPinTypeGpioOutput(IOID_15);
-	    IOCPinTypeGpioOutput(IOID_8);
-	    IOCPinTypeGpioOutput(IOID_7);
+		IOCPinTypeGpioOutput(LED_ELEVADOR_MOVIMENTO_1);
+		IOCPinTypeGpioOutput(LED_ELEVADOR_MOVIMENTO_2);
+		IOCPinTypeGpioOutput(LED_ELEVADOR_MOVIMENTO_3);
+		IOCPinTypeGpioOutput(LED_NIVEL_ELEVADOR_ACIMA);
+		IOCPinTypeGpioOutput(LED_NIVEL_ELEVADOR_ABAIXO);
+		IOCPinTypeGpioOutput(LED_NIVEL_ELEVADOR_CORRETO);
 
 		//Definir porta a ser escutada
-		server_conn = udp_new(NULL, UIP_HTONS(CONN_PORT), NULL);
-		udp_bind(server_conn, UIP_HTONS(CONN_PORT));
+		server_conn = udp_new(NULL, UIP_HTONS(PORT_MSG), NULL);
+		udp_bind(server_conn, UIP_HTONS(PORT_MSG));
 
-		//Inicializando o controle dos andares
-		//Para fazer analises dos andares
-		andares = malloc (qtdMaxAndar * sizeof (int));
-		int i;
-		for(i = 0; i< qtdMaxAndar; i++){
-			andares[i] = 0;
-		}
+
+		//Apagar todos os LEDS
+		apagarLedsElevador();
 
 		while (1) {
 			//Liberando o processador
@@ -346,8 +388,6 @@ PROCESS_THREAD(projetoUDP_process, ev, data) {
 			//Aguardando um Evento do tipo TCP/IP
 			if (ev == tcpip_event) {
 				eventoTcpIP();
-				//Apos cada evento, vamos imprimir o status atual
-				imprimir();
 				//Executa acoes na placa para exibir o status do elevador
 				acoes();
 			}

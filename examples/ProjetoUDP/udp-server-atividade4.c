@@ -41,7 +41,7 @@
 #define LED_GET_STATE (0x7B)
 #define LED_STATE (0x7C)
 
-#define CONN_PORT (8802)
+#define PORT_MSG (8802)
 
 
 #define DEBUG DEBUG_PRINT
@@ -84,12 +84,16 @@ tcpip_handler(void)
         case LED_TOGGLE_REQUEST:
         {
             PRINTF("LED_TOGGLE_REQUEST\n");
+
+
             //Monta um LED_SET_STATE e envia para o nó solicitante
             uip_ipaddr_copy(&server_conn->ripaddr, &UIP_IP_BUF->srcipaddr);
             server_conn->rport = UIP_UDP_BUF->destport;
+            uip_udp_packet_send(server_conn, buf, 2);
+
+
             buf[0] = LED_SET_STATE;
             buf[1] = (ledCounter++)&0x03;
-            uip_udp_packet_send(server_conn, buf, 2);
             PRINTF("Enviando LED_SET_STATE para [");
             PRINT6ADDR(&server_conn->ripaddr);
             PRINTF("]:%u\n", UIP_HTONS(server_conn->rport));
@@ -174,8 +178,8 @@ PROCESS_THREAD(udp_server_process, ev, data)
   }
 #endif
 
-  server_conn = udp_new(NULL, UIP_HTONS(CONN_PORT), NULL);
-  udp_bind(server_conn, UIP_HTONS(CONN_PORT));
+  server_conn = udp_new(NULL, UIP_HTONS(PORT_MSG), NULL);
+  udp_bind(server_conn, UIP_HTONS(PORT_MSG));
 
   while(1) {
     PROCESS_YIELD();

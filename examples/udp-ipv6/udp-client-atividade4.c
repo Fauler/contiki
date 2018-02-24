@@ -40,10 +40,10 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#define SEND_INTERVAL		10 * CLOCK_SECOND
+#define SEND_INTERVAL		5 * CLOCK_SECOND
 #define MAX_PAYLOAD_LEN		40
-#define CONN_PORT     8802
-#define MDNS 1
+#define PORT_MSG     8802
+#define MDNS 0
 
 #define LED_TOGGLE_REQUEST (0x79)
 #define LED_SET_STATE (0x7A)
@@ -65,7 +65,72 @@ static struct uip_udp_conn *client_conn;
 PROCESS(udp_client_process, "UDP client process");
 AUTOSTART_PROCESSES(&resolv_process,&udp_client_process);
 /*---------------------------------------------------------------------------*/
+void print(char *msg) {
+
+	PRINTF("\nCliente para [");
+	PRINT6ADDR(&client_conn->ripaddr);
+	PRINTF("]:[%u]", UIP_HTONS(client_conn->rport));
+	PRINTF("\t MSG[%s]", msg);
+}
+
+
 static void
+tcpip_handler_aula(void)
+{
+	char *dados;
+	int ledR = 0;
+	int ledG = 0;
+
+    if(uip_newdata()) {
+        dados = uip_appdata;
+
+        switch(dados[0]) {
+            case LED_SET_STATE:
+                printf("\nResposta do server: LED_SET_STATE\n");
+
+                leds_off(LEDS_ALL);
+
+                ledG = dados[1]&0x1;      // ???
+                ledR = (dados[1]&0x2)>>1; // ???
+			   	printf("Dados = %d %d\n", ledR, ledG);
+
+			   	if ( ledR == 1 ) {
+			   		leds_on(LEDS_RED);
+				} else if ( ledR == 0 ) {
+					leds_off(LEDS_RED);
+				}
+			    if ( ledG == 1 ) {
+				   leds_on(LEDS_GREEN);
+			   } else if ( ledG == 0 ) {
+				   leds_off(LEDS_GREEN);
+			   }
+
+
+                buf[0] = LED_STATE;
+                buf[1] = leds_get();
+
+                uip_ipaddr_copy(&client_conn->ripaddr, &UIP_IP_BUF->srcipaddr);
+				client_conn->rport = UIP_UDP_BUF->destport;
+				uip_udp_packet_send(client_conn, buf,2*sizeof(buf[0]));
+                break;
+            case LED_GET_STATE:
+                printf("\nResposta do server: LED_GET_STATE\n");
+                buf[0] = LED_STATE;
+                buf[1] = leds_get();
+                uip_ipaddr_copy(&client_conn->ripaddr, &UIP_IP_BUF->srcipaddr);
+                client_conn->rport = UIP_UDP_BUF->destport;
+				uip_udp_packet_send(client_conn, buf,2*sizeof(buf[0]));
+                break;
+            default:
+            	break;
+          }
+    }
+
+
+
+
+}
+/*---------------------------------------------------------------------------*/
 tcpip_handler(void)
 {
     char *dados;
@@ -109,7 +174,7 @@ tcpip_handler(void)
         buf[12] = '2';
         buf[13] = '0';
         buf[14] = '1';
-        buf[15] = '7';
+        buf[15] = '8';
         buf[16] = ' ';
         buf[17] = '=';
         buf[18] = '=';
@@ -119,12 +184,12 @@ tcpip_handler(void)
         uip_udp_packet_send(client_conn, buf, strlen(buf));
 
 
-        req.opRequest = OP_REQUEST;
-        req.op1 = 15;
-        req.operation = OP_SUBTRACT;
-        req.op2 = 5;
-        req.fc = 2;
-        uip_udp_packet_send(client_conn, &req, sizeof(struct mathopreq));
+//        req.opRequest = OP_REQUEST;
+//        req.op1 = 15;
+//        req.operation = OP_SUBTRACT;
+//        req.op2 = 5;
+//        req.fc = 2;
+//        uip_udp_packet_send(client_conn, &req, sizeof(struct mathopreq));
     }
 
 
@@ -141,11 +206,9 @@ timeout_handler(char payload)
       return;
     }
 
-    PRINTF("\nCliente para [");
-    PRINT6ADDR(&client_conn->ripaddr);
-    PRINTF("]:%u", UIP_HTONS(client_conn->rport));
+    print(buf);
 
-    uip_udp_packet_send(client_conn, buf, strlen(buf));
+    uip_udp_packet_send(client_conn, buf, sizeof(buf[0]));
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -250,16 +313,20 @@ PROCESS_THREAD(udp_client_process, ev, data)
       }
   }
 #else
-  //c_onfigures the destination IPv6 address
-  uip_ip6addr(&ipaddr, 0xFD00, 0, 0, 0, 0x212, 0x4B00, 0x791, 0xB681);
+  //configures the destination IPv6 address
+  //2804:7f4:3b80:9440:212:4b00:b22:dc82
+  // uip_ip6addr(&ipaddr, 0xfd00, 0, 0, 0, 0x212, 0x4b00, 0x791, 0xb681); // projeto
+  uip_ip6addr(&ipaddr, 0x2804, 0x7f4, 0x3b80, 0xa4f1, 0xa7d5, 0x85c9, 0xcbe4, 0x166b); // 2018
+  // >>> uip_ip6addr(&ipaddr, 0x2804, 0x7f4, 0x3b80, 0xa4f1, 0xcd2f, 0xe2e1, 0xa865, 0xcd7e); // 2018
+  //uip_ip6addr(&ipaddr, 0xfe80, 0, 0, 0, 0x215, 0x2000, 0x0002, 0x2145);
 #endif
   /* new connection with remote host */
-  client_conn = udp_new(&ipaddr, UIP_HTONS(CONN_PORT), NULL);
-  udp_bind(client_conn, UIP_HTONS(CONN_PORT));
+  client_conn = udp_new(&ipaddr, UIP_HTONS(PORT_MSG), NULL);
+  udp_bind(client_conn, UIP_HTONS(PORT_MSG));
 
   PRINT6ADDR(&client_conn->ripaddr);
   PRINTF(" local/remote port %u/%u\n",
-	UIP_HTONS(client_conn->lport), UIP_HTONS(client_conn->rport));
+    UIP_HTONS(client_conn->lport), UIP_HTONS(client_conn->rport));
 
   etimer_set(&et, SEND_INTERVAL);
   while(1) {
@@ -268,7 +335,7 @@ PROCESS_THREAD(udp_client_process, ev, data)
       timeout_handler(LED_TOGGLE_REQUEST);
       etimer_restart(&et);
     } else if(ev == tcpip_event) {
-      tcpip_handler();
+      tcpip_handler_aula();
     }
   }
 

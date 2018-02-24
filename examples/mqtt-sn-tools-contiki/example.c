@@ -52,8 +52,8 @@
 
 static struct mqtt_sn_connection mqtt_sn_c;
 static char *mqtt_client_id="sensor";
-static char ctrl_topic[22] = "0000000000000000/ctrl\0";//of form "0011223344556677/ctrl" it is null terminated, and is 21 charactes
-static char pub_topic[21] = "0000000000000000/msg\0";
+static char ctrl_topic[22] = "00124B000F28C186/ctrl\0";//of form "0011223344556677/ctrl" it is null terminated, and is 21 charactes
+static char pub_topic[21] = "00124B000F28C186/msg\0";
 static uint16_t ctrl_topic_id;
 static uint16_t publisher_topic_id;
 static publish_packet_t incoming_packet;
@@ -251,6 +251,8 @@ static void connection_timer_callback(void *mqc)
 
 PROCESS_THREAD(example_mqttsn_process, ev, data)
 {
+
+    printf("\n\n\nCOMECOU - LETS ROCK IT\n\n");
   static struct etimer periodic_timer;
   static uip_ipaddr_t broker_addr;
   static uint8_t connection_retries = 0;
@@ -261,8 +263,15 @@ PROCESS_THREAD(example_mqttsn_process, ev, data)
 
   mqtt_sn_set_debug(1);
 
-  uip_ip6addr(&broker_addr, 0xbbbb, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x200);
+  //uip_ip6addr(&broker_addr, 0xbbbb, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x200);
+
+  //http://pksr.eletrica.eng.br/
+  //2804:7f4:3b80:a4f1:76bb:4e0f:e3e9:636c
+  uip_ip6addr(&broker_addr, 0x2804, 0x7f4, 0x3b80, 0xa4f1, 0x76bb, 0x4e0f, 0xe3e9, 0x636c);
+
+
   //uip_ip6addr(&broker_addr, 0xbbbb, 0x0, 0x0, 0x0, 0x6066, 0xcf93, 0xa440, 0xd672);
+
 
   //static uint16_t broker_address[] = {0xbbbb, 0, 0, 0, 0xc83e, 0xccfc, 0x7, 0x12a};
 
@@ -280,6 +289,9 @@ PROCESS_THREAD(example_mqttsn_process, ev, data)
             linkaddr_node_addr.u8[2],linkaddr_node_addr.u8[3],
             linkaddr_node_addr.u8[4],linkaddr_node_addr.u8[5],
             linkaddr_node_addr.u8[6],linkaddr_node_addr.u8[7]);
+
+  //MEU DEVICE_ID: 00124B000F28C186
+  printf("\nDEVICE: %s\n", device_id);
 
 
 

@@ -11,6 +11,10 @@ CONTIKI=../../..
 #linker optimizations
 SMALL=1
 
+CFLAGS += -DUIP_CONF_ND6_SEND_NS=1
+CFLAGS += -g
+DEBUG = 1
+
 CFLAGS += -DPROJECT_CONF_H=\"project-conf.h\"
 PROJECT_SOURCEFILES += slip-net.c no-framer.c
 ifeq ($(TARGET),sky)

@@ -41,7 +41,7 @@
 #define LED_GET_STATE (0x7B)
 #define LED_STATE (0x7C)
 
-#define CONN_PORT (8802)
+#define PORT_MSG (8802)
 
 
 #define DEBUG DEBUG_PRINT
@@ -174,8 +174,8 @@ PROCESS_THREAD(udp_server_process, ev, data)
   }
 #endif
 
-  server_conn = udp_new(NULL, UIP_HTONS(CONN_PORT), NULL);
-  udp_bind(server_conn, UIP_HTONS(CONN_PORT));
+  server_conn = udp_new(NULL, UIP_HTONS(PORT_MSG), NULL);
+  udp_bind(server_conn, UIP_HTONS(PORT_MSG));
 
   while(1) {
     PROCESS_YIELD();

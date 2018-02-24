@@ -17,7 +17,7 @@
 #define LED_SET_STATE (0x7A)
 #define LED_GET_STATE (0x7B)
 #define LED_STATE (0x7C)
-#define CONN_PORT (8802)
+#define PORT_MSG (8802)
 
 #define OP_SUBTRACT (0x25)
 #define OP_RESULT (0x6F)

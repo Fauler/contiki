@@ -30,7 +30,6 @@
  * 
  * Author: François Revol <revol@free.fr>
  */
-
 #include <curses.h>
 #include <signal.h>
 #include <stdlib.h>

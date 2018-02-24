@@ -18,14 +18,12 @@
 
 #define QTD_MAX_ERROS_PERMITIDO 2
 
-int qtdMaxAndar = ((ANDAR_MAXIMO >= 0 ? ANDAR_MAXIMO : ANDAR_MAXIMO * -1) + (ANDAR_MINIMO >= 0 ? ANDAR_MINIMO : ANDAR_MINIMO * -1)) +1;
-int op = 1;
-int porta = PORTA_ABERTA;
-int nivelElevador = NIVEL_ELEVADOR_CORRETO;
-int elevador = ELEVADOR_PARADO;
-int andarAtual = 0;
-int andarDestino = 0;
-int *andares;
+static int op = 1;
+static int porta = PORTA_ABERTA;
+static int nivelElevador = NIVEL_ELEVADOR_CORRETO;
+static int elevador = ELEVADOR_PARADO;
+static int andarAtual = 0;
+static int andarDestino = 0;
 
 void lerSensores(){
     int validacao = 0;
